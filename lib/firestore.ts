@@ -1,5 +1,19 @@
 import { db } from "./firebase"
-import { doc, setDoc, updateDoc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore"
+import {
+  doc,
+  setDoc,
+  updateDoc,
+  getDoc,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  limit,
+  serverTimestamp,
+  Timestamp,
+} from "firebase/firestore"
 import type { User } from "firebase/auth"
 
 export interface UserData {
@@ -218,5 +232,88 @@ export async function getStreak(userId: string): Promise<number> {
   } catch (error) {
     console.error("Error getting streak:", error)
     throw error
+  }
+}
+
+// ─── Mood Tracking ────────────────────────────────────────────────────────────
+
+export type MoodLevel = 1 | 2 | 3 | 4 | 5
+
+export interface MoodEntry {
+  id?: string
+  mood: MoodLevel
+  note?: string
+  timestamp: Date
+}
+
+export async function saveMoodEntry(userId: string, mood: MoodLevel, note?: string): Promise<void> {
+  try {
+    await addDoc(collection(db, "users", userId, "moods"), {
+      mood,
+      note: note || "",
+      timestamp: serverTimestamp(),
+    })
+  } catch (error) {
+    console.error("Error saving mood entry:", error)
+    throw error
+  }
+}
+
+export async function getRecentMoods(userId: string, days = 7): Promise<MoodEntry[]> {
+  try {
+    const since = new Date()
+    since.setDate(since.getDate() - days)
+
+    const moodsRef = collection(db, "users", userId, "moods")
+    const q = query(
+      moodsRef,
+      where("timestamp", ">=", Timestamp.fromDate(since)),
+      orderBy("timestamp", "desc"),
+      limit(30),
+    )
+
+    const snapshot = await getDocs(q)
+    return snapshot.docs.map((d) => {
+      const data = d.data()
+      return {
+        id: d.id,
+        mood: data.mood as MoodLevel,
+        note: data.note,
+        timestamp: data.timestamp?.toDate() || new Date(),
+      }
+    })
+  } catch (error) {
+    console.error("Error fetching recent moods:", error)
+    return []
+  }
+}
+
+export async function getTodayMood(userId: string): Promise<MoodEntry | null> {
+  try {
+    const startOfDay = new Date()
+    startOfDay.setHours(0, 0, 0, 0)
+
+    const moodsRef = collection(db, "users", userId, "moods")
+    const q = query(
+      moodsRef,
+      where("timestamp", ">=", Timestamp.fromDate(startOfDay)),
+      orderBy("timestamp", "desc"),
+      limit(1),
+    )
+
+    const snapshot = await getDocs(q)
+    if (snapshot.empty) return null
+
+    const d = snapshot.docs[0]
+    const data = d.data()
+    return {
+      id: d.id,
+      mood: data.mood as MoodLevel,
+      note: data.note,
+      timestamp: data.timestamp?.toDate() || new Date(),
+    }
+  } catch (error) {
+    console.error("Error fetching today's mood:", error)
+    return null
   }
 }
