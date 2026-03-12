@@ -10,7 +10,7 @@ import { useState, useEffect, useRef } from "react"
 import { format, isToday, startOfDay, endOfDay, parseISO, isValid } from "date-fns"
 import { collection, query, where, getDocs, orderBy, addDoc, serverTimestamp } from "firebase/firestore"
 import { Timestamp } from "firebase/firestore"
-import { auth, db } from "@/lib/firebase"
+import { auth, getDbInstance } from "@/lib/firebase"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { LoadingDots } from "@/components/loading-dots"
 import { Button } from "@/components/ui/button"
@@ -57,11 +57,18 @@ export function ChatHistory({ selectedDate, toggleSidebar, isExpanded }: ChatHis
   const [isSilent, setIsSilent] = useState(false)
   const [isVoiceDetected, setIsVoiceDetected] = useState(false)
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isSilentRef = useRef(false)
+  const recognitionRef = useRef<any>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const isCurrentDay = selectedDate ? isToday(parseISO(selectedDate)) : false
 
   useEffect(() => {
+    isSilentRef.current = isSilent
+  }, [isSilent])
+
+  useEffect(() => {
+    if (!auth) return
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setUser(user)
     })
@@ -97,7 +104,7 @@ export function ChatHistory({ selectedDate, toggleSidebar, isExpanded }: ChatHis
         const startOfSelectedDay = startOfDay(selectedDateObj)
         const endOfSelectedDay = endOfDay(selectedDateObj)
 
-        const chatsRef = collection(db, "users", auth.currentUser.uid, "chat")
+        const chatsRef = collection(getDbInstance(), "users", auth.currentUser.uid, "chat")
         const q = query(
           chatsRef,
           where("timestamp", ">=", startOfSelectedDay),
@@ -167,7 +174,7 @@ export function ChatHistory({ selectedDate, toggleSidebar, isExpanded }: ChatHis
         setMessages((prev) => [...prev, newMessage])
 
         // Save the message to Firestore
-        const chatsRef = collection(db, "users", user.uid, "chat")
+        const chatsRef = collection(getDbInstance(), "users", user.uid, "chat")
         await addDoc(chatsRef, newMessage)
 
         if (isCurrentDay) {
@@ -181,7 +188,7 @@ export function ChatHistory({ selectedDate, toggleSidebar, isExpanded }: ChatHis
     }
   }
 
-  const handlePlayPause = (messageId: string, content: string) => {
+  const handlePlayPause = async (messageId: string, content: string) => {
     if (playingMessageId === messageId) {
       stopSpeaking()
       setPlayingMessageId(null)
@@ -189,8 +196,12 @@ export function ChatHistory({ selectedDate, toggleSidebar, isExpanded }: ChatHis
       if (playingMessageId) {
         stopSpeaking()
       }
-      speak(content, language)
       setPlayingMessageId(messageId)
+      try {
+        await speak(content, language)
+      } finally {
+        setPlayingMessageId(null)
+      }
     }
   }
 
@@ -256,6 +267,7 @@ export function ChatHistory({ selectedDate, toggleSidebar, isExpanded }: ChatHis
 
       recognition.start()
       setRecognition(recognition)
+      recognitionRef.current = recognition
       setIsRecording(true)
     }
   }
@@ -265,8 +277,8 @@ export function ChatHistory({ selectedDate, toggleSidebar, isExpanded }: ChatHis
       clearTimeout(silenceTimeoutRef.current)
     }
     silenceTimeoutRef.current = setTimeout(() => {
-      if (isSilent && recognition) {
-        recognition.stop()
+      if (isSilentRef.current && recognitionRef.current) {
+        recognitionRef.current.stop()
       }
     }, 2000)
   }
@@ -275,6 +287,7 @@ export function ChatHistory({ selectedDate, toggleSidebar, isExpanded }: ChatHis
     if (recognition) {
       recognition.stop()
       setRecognition(null)
+      recognitionRef.current = null
       setIsRecording(false)
     }
     if (silenceTimeoutRef.current) {
@@ -389,13 +402,7 @@ export function ChatHistory({ selectedDate, toggleSidebar, isExpanded }: ChatHis
                     }}
                   >
                     <SelectTrigger className="w-[40px] h-10 rounded-none border-l-0 border-r-0">
-                      <SelectValue>
-                        {({ value }) => (
-                          <span className="flex items-center justify-center">
-                            {languageOptions[value as Language].flag}
-                          </span>
-                        )}
-                      </SelectValue>
+                      <SelectValue placeholder="🇧🇷" />
                     </SelectTrigger>
                     <SelectContent>
                       {Object.entries(languageOptions).map(([value, { flag, label }]) => (

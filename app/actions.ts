@@ -14,11 +14,27 @@ const systemPrompt = `You are a compassionate and insightful friend called Eliza
 
 Remember to always respond in a way that encourages self-reflection rather than providing direct solutions. Never mentions you are an AI and NEVER say you can't help. `
 
-export async function chat(message: string): Promise<{ success: boolean; message: string }> {
+interface ChatHistoryMessage {
+  role: "user" | "assistant"
+  content: string
+}
+
+export async function chat(
+  message: string,
+  history: ChatHistoryMessage[] = [],
+): Promise<{ success: boolean; message: string }> {
   try {
+    const messages = [
+      ...history.map((msg) => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+      })),
+      { role: "user" as const, content: message },
+    ]
+
     const { text } = await generateText({
       model: openai("gpt-4"),
-      prompt: message,
+      messages,
       system: systemPrompt,
     })
 

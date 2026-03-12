@@ -8,18 +8,19 @@ import { HistorySidebar } from "@/components/history-sidebar"
 import { ChatHistory } from "@/components/chat-history"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { Header } from "@/components/header"
-import { ThemeProvider, useTheme } from "@/components/theme-provider"
+import { ThemeProvider } from "@/components/theme-provider"
+import { LoadingDots } from "@/components/loading-dots"
 import { format } from "date-fns"
 
-export default function HistoryPage() {
+function HistoryPageContent() {
   const router = useRouter()
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"))
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const { theme, setTheme } = useTheme()
   const [isExpanded, setIsExpanded] = useState(true)
 
   useEffect(() => {
+    if (!auth) return
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser)
       setLoading(false)
@@ -33,7 +34,7 @@ export default function HistoryPage() {
 
   const handleLogout = async () => {
     try {
-      await auth.signOut()
+      if (auth) await auth.signOut()
       router.push("/")
     } catch (error) {
       console.error("Error signing out:", error)
@@ -43,33 +44,40 @@ export default function HistoryPage() {
   const toggleSidebar = () => setIsExpanded((prev) => !prev)
 
   if (loading) {
-    return <div>Loading...</div>
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <LoadingDots />
+      </div>
+    )
   }
 
   return (
+    <SidebarProvider>
+      <div className="flex h-screen w-full bg-background">
+        <Header
+          isLoggedIn={!!user}
+          user={user}
+          onLogout={handleLogout}
+          showHeader={false}
+        />
+        <HistorySidebar
+          onDateSelect={setSelectedDate}
+          selectedDate={selectedDate}
+          isExpanded={isExpanded}
+          toggleSidebar={toggleSidebar}
+        />
+        <main className="flex-1 overflow-hidden">
+          <ChatHistory selectedDate={selectedDate} toggleSidebar={toggleSidebar} isExpanded={isExpanded} />
+        </main>
+      </div>
+    </SidebarProvider>
+  )
+}
+
+export default function HistoryPage() {
+  return (
     <ThemeProvider>
-      <SidebarProvider>
-        <div className="flex h-screen w-full bg-background">
-          <Header
-            isDarkMode={theme === "dark"}
-            onThemeToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
-            isLoggedIn={!!user}
-            onLoginToggle={() => {}}
-            user={user}
-            onLogout={handleLogout}
-            showHeader={false}
-          />
-          <HistorySidebar
-            onDateSelect={setSelectedDate}
-            selectedDate={selectedDate}
-            isExpanded={isExpanded}
-            toggleSidebar={toggleSidebar}
-          />
-          <main className="flex-1 overflow-hidden">
-            <ChatHistory selectedDate={selectedDate} toggleSidebar={toggleSidebar} isExpanded={isExpanded} />
-          </main>
-        </div>
-      </SidebarProvider>
+      <HistoryPageContent />
     </ThemeProvider>
   )
 }
