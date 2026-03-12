@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { format, isToday, parseISO } from "date-fns"
 import { Book, Calendar, LogOut, Moon, Search, Sun } from "lucide-react"
-import { auth, db } from "@/lib/firebase"
+import { auth, getDbInstance } from "@/lib/firebase"
 import { collection, query, getDocs, orderBy } from "firebase/firestore"
 import { signOut } from "firebase/auth"
 import { Button } from "@/components/ui/button"
@@ -44,7 +44,7 @@ export function HistorySidebar({ onDateSelect, selectedDate, isExpanded, toggleS
     const fetchChatDates = async () => {
       if (!user) return
 
-      const chatsRef = collection(db, "users", user.uid, "chat")
+      const chatsRef = collection(getDbInstance(), "users", user.uid, "chat")
       const q = query(chatsRef, orderBy("timestamp", "desc"))
       const querySnapshot = await getDocs(q)
 
@@ -166,7 +166,7 @@ export function HistorySidebar({ onDateSelect, selectedDate, isExpanded, toggleS
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
             <Button
-              variant="logout"
+              variant="ghost"
               size="icon"
               onClick={handleLogout}
               className="h-9 w-9 bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"

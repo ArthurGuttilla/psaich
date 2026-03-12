@@ -65,8 +65,15 @@ export function ChatInterface({
   const [isAiResponding, setIsAiResponding] = useState(false)
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null)
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isSilentRef = useRef(false)
+  const recognitionRef = useRef<any>(null)
   const lastTranscriptRef = useRef("")
   const inputRef = useRef<HTMLInputElement>(null)
+  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
+
+  useEffect(() => {
+    isSilentRef.current = isSilent
+  }, [isSilent])
 
   useEffect(() => {
     if (messageCount <= 0) {
@@ -161,7 +168,9 @@ export function ChatInterface({
 
       recognition.onerror = (event: any) => {
         console.error("Speech recognition error:", event.error)
-        console.log("Error details:", event)
+        if (event.error !== "no-speech" && event.error !== "aborted") {
+          stopRecording()
+        }
       }
 
       recognition.onstart = () => {
@@ -171,8 +180,8 @@ export function ChatInterface({
       try {
         recognition.start()
         setRecognition(recognition)
+        recognitionRef.current = recognition
         setIsRecording(true)
-        console.log("Recording started")
       } catch (error) {
         console.error("Error starting speech recognition:", error)
       }
@@ -181,29 +190,13 @@ export function ChatInterface({
     }
   }
 
-  const handleSpeechError = (event: any) => {
-    console.error("Speech recognition error:", event.error)
-    console.log("Error details:", event)
-
-    // Provide user feedback
-    setInput((prevInput) => prevInput + " [Erro no reconhecimento de voz. Por favor, tente novamente.]")
-
-    // Attempt to restart recognition after a brief delay
-    setTimeout(() => {
-      if (isRecording) {
-        stopRecording()
-        startRecording()
-      }
-    }, 1000)
-  }
-
   const resetSilenceTimeout = () => {
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current)
     }
     silenceTimeoutRef.current = setTimeout(() => {
-      if (isSilent && recognition) {
-        recognition.stop()
+      if (isSilentRef.current && recognitionRef.current) {
+        recognitionRef.current.stop()
       }
     }, 2000)
   }
@@ -212,6 +205,7 @@ export function ChatInterface({
     if (recognition) {
       recognition.stop()
       setRecognition(null)
+      recognitionRef.current = null
       setIsRecording(false)
     }
     if (silenceTimeoutRef.current) {
@@ -226,27 +220,10 @@ export function ChatInterface({
     const canSend = onNewMessage()
     if (!canSend) return
 
-    const newCount = messageCount - 1
-    setMessageCount(newCount)
-
-    if (userId) {
-      try {
-        await updateFreeMessages(userId, newCount)
-      } catch (error) {
-        console.error("Error updating free messages count:", error)
-      }
-    } else {
-      localStorage.setItem("messageCount", newCount.toString())
-    }
-
-    if (newCount <= 0) {
-      onUpgradeNeeded()
-      return
-    }
-
+    const currentInput = input
     const userMessage: Message = {
       id: Date.now().toString(),
-      content: input,
+      content: currentInput,
       sender: "user",
     }
 
@@ -256,7 +233,12 @@ export function ChatInterface({
     setIsAiResponding(true)
 
     try {
-      const response = await chat(input)
+      const history = messages.map((msg) => ({
+        role: msg.sender === "user" ? "user" as const : "assistant" as const,
+        content: msg.content,
+      }))
+
+      const response = await chat(currentInput, history)
       if (response.success) {
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
@@ -265,12 +247,26 @@ export function ChatInterface({
         }
         setMessages((prev) => [...prev, aiMessage])
 
+        const newCount = messageCount - 1
+        setMessageCount(newCount)
+
         if (userId) {
+          try {
+            await updateFreeMessages(userId, newCount)
+          } catch (error) {
+            console.error("Error updating free messages count:", error)
+          }
           await saveChatMessage(userId, {
-            userMessage: input,
+            userMessage: currentInput,
             aiResponse: response.message,
             timestamp: new Date(),
           })
+        } else {
+          localStorage.setItem("messageCount", newCount.toString())
+        }
+
+        if (newCount <= 0) {
+          onUpgradeNeeded()
         }
       } else {
         throw new Error(response.message)
@@ -326,7 +322,7 @@ export function ChatInterface({
     }
   }
 
-  const handlePlayPause = (messageId: string, content: string) => {
+  const handlePlayPause = async (messageId: string, content: string) => {
     if (playingMessageId === messageId) {
       stopSpeaking()
       setPlayingMessageId(null)
@@ -334,20 +330,19 @@ export function ChatInterface({
       if (playingMessageId) {
         stopSpeaking()
       }
-      speak(content, language)
       setPlayingMessageId(messageId)
+      try {
+        await speak(content, language)
+      } finally {
+        setPlayingMessageId(null)
+      }
     }
   }
 
   useEffect(() => {
-    const handleSpeechEnd = () => {
-      setPlayingMessageId(null)
-    }
-
-    speechSynthesis.addEventListener("end", handleSpeechEnd)
-
     return () => {
-      speechSynthesis.removeEventListener("end", handleSpeechEnd)
+      stopSpeaking()
+      currentUtteranceRef.current = null
     }
   }, [])
 
@@ -382,13 +377,7 @@ export function ChatInterface({
               }}
             >
               <SelectTrigger className="w-[40px] h-10 rounded-none border-l-0 border-r-0">
-                <SelectValue>
-                  {({ value }) => (
-                    <span className="flex items-center justify-center">
-                      {languageOptions[value as Language]?.flag || "🇧🇷"}
-                    </span>
-                  )}
-                </SelectValue>
+                <SelectValue placeholder="🇧🇷" />
               </SelectTrigger>
               <SelectContent>
                 {Object.entries(languageOptions).map(([value, { flag, label }]) => (

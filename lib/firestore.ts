@@ -1,4 +1,4 @@
-import { db } from "./firebase"
+import { getDbInstance } from "./firebase"
 import { doc, setDoc, updateDoc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore"
 import type { User } from "firebase/auth"
 
@@ -20,7 +20,7 @@ export interface UserData {
 }
 
 export async function getUserData(userId: string): Promise<UserData | null> {
-  const userDocRef = doc(db, "users", userId)
+  const userDocRef = doc(getDbInstance(), "users", userId)
   try {
     const userDoc = await getDoc(userDocRef)
     if (userDoc.exists()) {
@@ -39,7 +39,7 @@ export async function getUserData(userId: string): Promise<UserData | null> {
 }
 
 export async function updateUserData(userId: string, data: Partial<UserData>) {
-  const userDocRef = doc(db, "users", userId)
+  const userDocRef = doc(getDbInstance(), "users", userId)
   try {
     await updateDoc(userDocRef, data)
   } catch (error) {
@@ -49,7 +49,7 @@ export async function updateUserData(userId: string, data: Partial<UserData>) {
 }
 
 export async function saveUserData(user: User, additionalData: Partial<UserData>) {
-  const userDocRef = doc(db, "users", user.uid)
+  const userDocRef = doc(getDbInstance(), "users", user.uid)
   const userDoc = await getDoc(userDocRef)
 
   const now = new Date()
@@ -90,7 +90,7 @@ export async function saveUserData(user: User, additionalData: Partial<UserData>
 
 export async function updateLastLogin(userId: string) {
   try {
-    await updateDoc(doc(db, "users", userId), {
+    await updateDoc(doc(getDbInstance(), "users", userId), {
       lastLogin: serverTimestamp(),
     })
   } catch (error) {
@@ -100,7 +100,7 @@ export async function updateLastLogin(userId: string) {
 }
 
 export async function updateFreeMessages(userId: string, count: number) {
-  const userDocRef = doc(db, "users", userId)
+  const userDocRef = doc(getDbInstance(), "users", userId)
   try {
     await updateDoc(userDocRef, {
       freeMessages: count,
@@ -112,7 +112,7 @@ export async function updateFreeMessages(userId: string, count: number) {
 }
 
 export async function getFreeMessagesCount(userId: string): Promise<number> {
-  const userDocRef = doc(db, "users", userId)
+  const userDocRef = doc(getDbInstance(), "users", userId)
   try {
     const userDoc = await getDoc(userDocRef)
     const userData = userDoc.data() as UserData
@@ -138,7 +138,7 @@ function shouldResetFreeMessages(lastReset: Date): boolean {
 }
 
 async function resetFreeMessages(userId: string) {
-  const userDocRef = doc(db, "users", userId)
+  const userDocRef = doc(getDbInstance(), "users", userId)
   try {
     await updateDoc(userDocRef, {
       freeMessages: 15,
@@ -158,7 +158,7 @@ export interface ChatMessage {
 
 export async function saveChatMessage(userId: string, message: ChatMessage) {
   try {
-    await addDoc(collection(db, "users", userId, "chat"), {
+    await addDoc(collection(getDbInstance(), "users", userId, "chat"), {
       ...message,
       timestamp: serverTimestamp(),
     })
@@ -169,7 +169,7 @@ export async function saveChatMessage(userId: string, message: ChatMessage) {
 }
 
 export async function updateStreak(userId: string) {
-  const userDocRef = doc(db, "users", userId)
+  const userDocRef = doc(getDbInstance(), "users", userId)
   const now = new Date()
 
   try {
@@ -210,7 +210,7 @@ export async function updateStreak(userId: string) {
 }
 
 export async function getStreak(userId: string): Promise<number> {
-  const userDocRef = doc(db, "users", userId)
+  const userDocRef = doc(getDbInstance(), "users", userId)
   try {
     const userDoc = await getDoc(userDocRef)
     const userData = userDoc.data() as UserData

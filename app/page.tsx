@@ -35,6 +35,7 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
+    if (!auth) return
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser)
       setIsLoggedIn(!!currentUser)
@@ -93,10 +94,10 @@ export default function Home() {
   }
 
   const handleUpgrade = () => {
-    // Implement upgrade logic here
-    console.log("User upgraded")
+    // TODO: Implement Stripe checkout or payment verification before granting messages
+    console.warn("handleUpgrade called without payment integration — granting messages for development/testing only")
     setIsUpgradePopupOpen(false)
-    setMessageCount(100) // Set a higher message count for upgraded users
+    setMessageCount(100)
     if (user) {
       updateFreeMessages(user.uid, 100)
     } else {
@@ -109,7 +110,15 @@ export default function Home() {
       <ThemeProvider>
         <div className="min-h-screen flex flex-col bg-[#f5f5f0] dark:bg-[#2a2a25] text-[#4a4a40] dark:text-[#e0e0d0]">
           <ErrorBoundary>
-            <Header isLoggedIn={isLoggedIn} user={user} onLogout={handleLogout} />
+            <Header
+              isLoggedIn={isLoggedIn}
+              user={user}
+              onLogout={handleLogout}
+              onLogin={(loggedInUser) => {
+                setUser(loggedInUser)
+                setIsLoggedIn(true)
+              }}
+            />
           </ErrorBoundary>
           <main className="flex-1 container mx-auto px-4 py-8 flex flex-col items-center justify-start">
             <div className="w-full max-w-4xl mx-auto flex flex-col items-center">

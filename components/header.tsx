@@ -16,17 +16,18 @@ interface HeaderProps {
   isLoggedIn: boolean
   user: User | null
   onLogout: () => void
+  onLogin?: (user: User) => void
   showHeader?: boolean
 }
 
-export function Header({ isLoggedIn, user, onLogout, showHeader = true }: HeaderProps) {
+export function Header({ isLoggedIn, user, onLogout, onLogin, showHeader = true }: HeaderProps) {
   const router = useRouter()
   const { theme, setTheme } = useTheme()
   const [isLoginPopupOpen, setIsLoginPopupOpen] = useState(false)
 
   const handleLogout = async () => {
     try {
-      await signOut(auth)
+      if (auth) await signOut(auth)
       onLogout()
     } catch (error) {
       console.error("Error signing out:", error)
@@ -45,10 +46,11 @@ export function Header({ isLoggedIn, user, onLogout, showHeader = true }: Header
     router.push("/settings")
   }
 
-  const handleLogin = (user: User) => {
-    // Handle successful login
+  const handleLogin = (loggedInUser: User) => {
     setIsLoginPopupOpen(false)
-    // You might want to update the parent component's state or trigger a re-fetch of user data
+    if (onLogin) {
+      onLogin(loggedInUser)
+    }
   }
 
   if (!showHeader) return null

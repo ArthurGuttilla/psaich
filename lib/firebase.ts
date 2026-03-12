@@ -1,41 +1,60 @@
-import { getApps, initializeApp } from "firebase/app"
-import { getAuth, GoogleAuthProvider, OAuthProvider, type User, updateProfile } from "firebase/auth"
-import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore"
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
+import { getApps, initializeApp, type FirebaseApp } from "firebase/app"
+import { getAuth, GoogleAuthProvider, OAuthProvider, type User, type Auth, updateProfile } from "firebase/auth"
+import { getFirestore, doc, setDoc, getDoc, type Firestore } from "firebase/firestore"
+import { getStorage, ref, uploadBytes, getDownloadURL, type FirebaseStorage } from "firebase/storage"
 
 const firebaseConfig = {
-  apiKey: "AIzaSyC53QFFcNZzs3xQyehL0pzmgW4dnMK_ATc",
-  authDomain: "psaich-com.firebaseapp.com",
-  projectId: "psaich-com",
-  storageBucket: "psaich-com.firebasestorage.app",
-  messagingSenderId: "614055865225",
-  appId: "1:614055865225:web:17a232662e97e30bba8f58",
-  measurementId: "G-79QP588KDE",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 }
 
-let app
-let auth
-let googleProvider
-let microsoftProvider
-let db
-let storage
+let app: FirebaseApp | undefined
+let auth: Auth | undefined
+let googleProvider: GoogleAuthProvider | undefined
+let microsoftProvider: OAuthProvider | undefined
+let db: Firestore | undefined
+let storage: FirebaseStorage | undefined
 
 if (typeof window !== "undefined" && !getApps().length) {
   app = initializeApp(firebaseConfig)
   auth = getAuth(app)
   googleProvider = new GoogleAuthProvider()
-  // NOTE: Make sure to enable Microsoft authentication in the Firebase console
-  // Go to Authentication > Sign-in method > Add new provider > Microsoft
   microsoftProvider = new OAuthProvider("microsoft.com")
   db = getFirestore(app)
   storage = getStorage(app)
 }
 
-export { auth, googleProvider, microsoftProvider, db, storage }
+function getAuthInstance(): Auth {
+  if (!auth) {
+    throw new Error("Firebase Auth is not initialized. Make sure you are on the client side.")
+  }
+  return auth
+}
+
+function getDbInstance(): Firestore {
+  if (!db) {
+    throw new Error("Firebase Firestore is not initialized. Make sure you are on the client side.")
+  }
+  return db
+}
+
+function getStorageInstance(): FirebaseStorage {
+  if (!storage) {
+    throw new Error("Firebase Storage is not initialized. Make sure you are on the client side.")
+  }
+  return storage
+}
+
+export { auth, googleProvider, microsoftProvider, db, storage, getAuthInstance, getDbInstance, getStorageInstance }
 
 // Dynamically import analytics only on the client side
 export const initializeAnalytics = async () => {
-  if (typeof window !== "undefined") {
+  if (typeof window !== "undefined" && app) {
     try {
       const { getAnalytics } = await import("firebase/analytics")
       return getAnalytics(app)
@@ -59,15 +78,14 @@ interface UserData {
 }
 
 export async function updateUserProfile(user: User, data: Partial<UserData>) {
+  const firestore = getDbInstance()
   try {
-    // Update Firebase Auth profile
     await updateProfile(user, {
       displayName: data.displayName,
       photoURL: data.photoURL,
     })
 
-    // Update Firestore document
-    const userDocRef = doc(db, "users", user.uid)
+    const userDocRef = doc(firestore, "users", user.uid)
     await setDoc(userDocRef, data, { merge: true })
   } catch (error) {
     console.error("Error updating user profile:", error)
@@ -76,8 +94,9 @@ export async function updateUserProfile(user: User, data: Partial<UserData>) {
 }
 
 export async function getUserProfile(userId: string): Promise<UserData | null> {
+  const firestore = getDbInstance()
   try {
-    const userDocRef = doc(db, "users", userId)
+    const userDocRef = doc(firestore, "users", userId)
     const userDoc = await getDoc(userDocRef)
 
     if (userDoc.exists()) {
@@ -92,7 +111,8 @@ export async function getUserProfile(userId: string): Promise<UserData | null> {
 }
 
 export async function uploadProfileImage(userId: string, file: File): Promise<string> {
-  const storageRef = ref(storage, `profile_images/${userId}`)
+  const storageInstance = getStorageInstance()
+  const storageRef = ref(storageInstance, `profile_images/${userId}`)
   await uploadBytes(storageRef, file)
   const downloadURL = await getDownloadURL(storageRef)
   return downloadURL

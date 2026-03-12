@@ -52,8 +52,10 @@ export function Sphere() {
     let colorChangeProgress = 0
     const colorChangeDuration = 3 // seconds
 
+    let animationFrameId: number
+
     function animate(time: number) {
-      requestAnimationFrame(animate)
+      animationFrameId = requestAnimationFrame(animate)
 
       sphere.rotation.x += 0.005
       sphere.rotation.y += 0.005
@@ -78,10 +80,12 @@ export function Sphere() {
     window.addEventListener("resize", updateSize)
 
     return () => {
+      cancelAnimationFrame(animationFrameId)
       window.removeEventListener("resize", updateSize)
       container.removeChild(renderer.domElement)
       geometry.dispose()
       material.dispose()
+      renderer.dispose()
     }
   }, [])
 
